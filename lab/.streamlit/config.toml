@@ -1,0 +1,21 @@
+# Tema de la pagina. Guia visual: referencias/diseno_referencia.md
+# Streamlit lee este archivo porque el contenedor arranca en /home/jovyan (carpeta lab).
+
+[theme]
+base = "dark"
+primaryColor = "#22c55e"
+backgroundColor = "#050505"
+secondaryBackgroundColor = "#101010"
+textColor = "#e8e8e8"
+borderColor = "#262626"
+baseRadius = "medium"
+font = "sans-serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
