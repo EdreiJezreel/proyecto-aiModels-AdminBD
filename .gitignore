@@ -1,0 +1,11 @@
+.DS_Store
+.env
+.ipynb_checkpoints/
+__pycache__/
+dataset_kaggle/*.csv
+lab/.cache/
+lab/.ipython/
+lab/.jupyter/
+lab/.local/
+lab/.npm/
+lab/warehouse/

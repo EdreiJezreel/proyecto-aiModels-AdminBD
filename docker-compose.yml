@@ -1,0 +1,141 @@
+services:
+
+  postgres:
+    image: postgres:16
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./tablespaces:/var/lib/postgresql/tablespaces/ts1
+    restart: always
+    networks:
+      - fes-acatlan
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - fes-acatlan
+
+  databasus:
+    image: databasus/databasus:latest
+    restart: unless-stopped
+    ports:
+      - "4005:4005"
+    depends_on:
+      - postgres
+    environment:
+      - ADMIN_NAME=${DATABASUS_NAME}
+      - ADMIN_EMAIL=${DATABASUS_EMAIL}
+      - ADMIN_PASSWORD=${DATABASUS_PASSWORD}
+    volumes:
+      - databasus_data:/databasus-data
+    networks:
+      - fes-acatlan
+
+  neo4j:
+    image: neo4j:5
+    restart: unless-stopped
+    ports:
+      - "7474:7474" # Interfaz web (Neo4j Browser)
+      - "7687:7687" # Protocolo Bolt (conexion desde Python)
+    environment:
+      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
+    volumes:
+      - ./neo4j/data:/data
+      - ./neo4j/logs:/logs
+      - ./neo4j/import:/var/lib/neo4j/import
+      - ./neo4j/plugins:/plugins
+    networks:
+      - fes-acatlan
+
+  stackport:
+    image: davireis/stackport:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - AWS_ENDPOINT_URL=http://ministack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    restart: unless-stopped
+    depends_on:
+      ministack:
+        condition: service_healthy
+    networks:
+      - fes-acatlan
+
+  ministack:
+    image: ministackorg/ministack:latest
+    ports:
+      - "4566:4566"
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4566/_ministack/health')" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fes-acatlan
+
+  pyspark:
+    volumes:
+      - ${PATH_JUPYTER}:/home/jovyan
+      - ./dataset_kaggle:/dataset_kaggle
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8888:8888
+    environment:
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - APP_DB_USER=${APP_DB_USER}
+      - APP_DB_PASSWORD=${APP_DB_PASSWORD}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+    networks:
+      - fes-acatlan
+
+  # Misma imagen que pyspark (el build queda en cache). Arranca con entrypoint,
+  # como el servicio pgloader del curso.
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: [ "streamlit", "run", "/home/jovyan/app/app.py", "--server.port=8501", "--server.address=0.0.0.0" ]
+    volumes:
+      - ${PATH_JUPYTER}:/home/jovyan
+    ports:
+      - 8501:8501
+    environment:
+      # El entrypoint se salta el arranque de Jupyter, que es quien pone esta ruta de PySpark
+      - PYTHONPATH=/usr/local/spark/python:/usr/local/spark/python/lib/py4j-0.10.9.7-src.zip
+      - POSTGRES_DB=${POSTGRES_DB}
+      - APP_DB_USER=${APP_DB_USER}
+      - APP_DB_PASSWORD=${APP_DB_PASSWORD}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+    depends_on:
+      - postgres
+      - neo4j
+      - ministack
+    networks:
+      - fes-acatlan
+
+networks:
+  fes-acatlan:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  grafana_data:
+  databasus_data:
